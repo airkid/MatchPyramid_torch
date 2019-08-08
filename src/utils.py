@@ -80,3 +80,10 @@ def init_logger(params):
     logger_scores = create_logger(os.path.join(params.data_path, 'scores.log'), rank=getattr(params, 'global_rank', 0))
 
     return logger, logger_scores
+
+
+def to_cuda(*args):
+    """
+    Move tensors to CUDA.
+    """
+    return [None if x is None else x.cuda() for x in args]

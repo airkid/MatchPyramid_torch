@@ -4,7 +4,10 @@ from logging import getLogger
 import numpy as np
 import torch
 import torch.nn.functional as F
-
+from torch.utils.data import DataLoader
+from sklearn.metrics import accuracy_score
+from src.dataset import collate_fn, truncate
+from src.utils import to_cuda
 
 logger = getLogger()
 
@@ -15,24 +18,73 @@ class MatchPyramidClassifier(object):
         self.params = params
         self.train_data = params.train_data
         self.test_data = params.test_data
+        self.epoch_cnt = 0
 
         self.embedding = torch.nn.Embedding()
+        ### init embedding with glove
         self.matchPyramid = MatchPyramid(self.params)
+
+        self.optimizer = torch.optim.Adam(
+            self.embedding.parameters()+self.matchPyramid.parameters(),
+            lr=self.params.lr
+        )
 
     def run(self):
         for i in range(self.params.n_epochs):
             self.train()
             self.evaluate()
+            self.epoch_cnt += 1
 
     def train(self):
+        logger.info("Training in epoch %i" % self.epoch_cnt)
         self.embedding.train()
         self.matchPyramid.train()
+        data_loader = DataLoader(self.train_data,
+                                 batch_size=self.params.batch_size,
+                                 shuffle=True,
+                                 collate_fn=collate_fn)
+        for data_iter in data_loader:
+            sen1, len1, sen2, len2, label = data_iter
+            sen1_ts, len1_ts, sen2_ts, len2_ts, label_ts = truncate(
+                sen1, len1, sen2, len2, label,
+                max_seq_len=self.params.max_seq_len)
+            sen1_ts, len1_ts, sen2_ts, len2_ts, label_ts = to_cuda(
+                sen1_ts, len1_ts, sen2_ts, len2_ts, label_ts)
+            sen1_embedding = self.embedding(sen1_ts)
+            sen2_embedding = self.embedding(sen2_ts)
+            mp_output = self.matchPyramid(sen1_embedding, sen2_embedding)
+            loss = F.cross_entropy(mp_output, label)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
     def evaluate(self):
+        logger.info("Evaluating in epoch %i" % self.epoch_cnt)
         self.embedding.eval()
         self.matchPyramid.eval()
+        data_loader = DataLoader(self.test_data,
+                                 batch_size=self.params.batch_size,
+                                 shuffle=False,
+                                 collate_fn=collate_fn)
+        pred_list = list()
+        label_list = list()
         with torch.no_grad():
-            pass
+            for data_iter in data_loader:
+                sen1, len1, sen2, len2, label = data_iter
+                sen1_ts, len1_ts, sen2_ts, len2_ts, label_ts = truncate(
+                    sen1, len1, sen2, len2, label,
+                    max_seq_len=self.params.max_seq_len)
+                sen1_ts, len1_ts, sen2_ts, len2_ts, label_ts = to_cuda(
+                    sen1_ts, len1_ts, sen2_ts, len2_ts, label_ts)
+                sen1_embedding = self.embedding(sen1_ts)
+                sen2_embedding = self.embedding(sen2_ts)
+                mp_output = self.matchPyramid(sen1_embedding, sen2_embedding)
+                predictions = mp_output.data.max(1)[1]
+                pred_list.extend(predictions.tolist())
+                label_list.extend(label.tolist())
+        acc = accuracy_score(label_list, pred_list)
+        logger.info("ACC score in epoch %i :%.4f" % (self.epoch_cnt, acc))
 
 
 class MatchPyramid(torch.nn.Module):
@@ -85,7 +137,7 @@ class MatchPyramid(torch.nn.Module):
         # use cosine similarity since dim is too big for dot-product
         simi_img = torch.matmul(x1, x2.transpose(1, 2)) / np.sqrt(dim_xlm)
         if pad1 != 0 or pad2 != 0:
-            simi_img = F.pad(simi_img, [0, pad2, 0, pad1])
+            simi_img = F.pad(simi_img, (0, pad2, 0, pad1))
         assert simi_img.size() == (bs, self.max_len1, self.max_len2)
         simi_img = simi_img.unsqueeze(1)
         # self.logger.info(simi_img.size())
@@ -109,12 +161,4 @@ class MPConfig(object):
     kernel = [[5, 5, 64], [3, 3, 32]]
     pool = [(14, 32), (4, 10)]
     mlp_hidden = 512
-
-
-if __name__ == "__main__":
-    mp = MatchPyramid(16, 32, 4)
-    input1 = torch.randn(24, 16, 100)
-    input2 = torch.randn(24, 32, 100)
-    output = mp(input1, input2)
-    print(output.size())
 
