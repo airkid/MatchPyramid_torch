@@ -17,11 +17,11 @@ parser.add_argument("--dump_path", type=str, default="./dump/",
                     help="")
 parser.add_argument("--embedding_path", type=str, default="data/glove.6B.300d.txt",
                     help="")
-parser.add_argument("--max_seq_len", type=int, default=32,
+parser.add_argument("--max_seq_len", type=int, default=50,
                     help="")
 parser.add_argument("--batch_size", type=int, default=32,
                     help="")
-parser.add_argument("--lr", type=float, default=0.001,
+parser.add_argument("--lr", type=float, default=0.0001,
                     help="")
 parser.add_argument("--n_epochs", type=int, default=50,
                     help="")
@@ -32,13 +32,13 @@ parser.add_argument("--dim_embedding", type=int, default=300,
 parser.add_argument("--dim_output", type=int, default=2,
                     help="")
 
-parser.add_argument("--conv1_size", type=str, default="5_5_16",
+parser.add_argument("--conv1_size", type=str, default="5_5_8",
                     help="")
 parser.add_argument("--pool1_size", type=str, default="10_10",
                     help="")
-parser.add_argument("--conv2_size", type=str, default="3_3_8",
+parser.add_argument("--conv2_size", type=str, default="3_3_16",
                     help="")
-parser.add_argument("--pool2_size", type=str, default="10_10",
+parser.add_argument("--pool2_size", type=str, default="5_5",
                     help="")
 parser.add_argument("--mp_hidden", type=int, default="128",
                     help="")
@@ -55,7 +55,7 @@ logger = init_logger(params)
 params.word2idx, params.glove_weight = load_w2v(params.embedding_path, params.dim_embedding)
 
 train_data = MSRPDataset(params.data_path, data_type="train")
-test_data = MSRPDataset(params.data_path, data_type="train")
+test_data = MSRPDataset(params.data_path, data_type="test")
 
 params.train_data = train_data
 params.test_data = test_data
