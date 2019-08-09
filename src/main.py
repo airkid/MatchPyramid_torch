@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import argparse
 
-from src.utils import init_logger
+from src.utils import init_logger, load_w2v
 from src.model import MatchPyramidClassifier
 from src.dataset import MSRPDataset
 
@@ -11,9 +11,11 @@ parser = argparse.ArgumentParser(
     description='Train and Evaluate MatchPyramid on MSRP dataset')
 
 # main parameters
-parser.add_argument("--data_path", type=str, default="./data/",
+parser.add_argument("--data_path", type=str, default="./data/msr_paraphrase",
                     help="")
-parser.add_argument("--embedding_path", type=str, default="./data/golve.6B.300d.txt",
+parser.add_argument("--dump_path", type=str, default="./dump/",
+                    help="")
+parser.add_argument("--embedding_path", type=str, default="data/glove.6B.300d.txt",
                     help="")
 parser.add_argument("--max_seq_len", type=int, default=32,
                     help="")
@@ -38,14 +40,19 @@ parser.add_argument("--conv2_size", type=str, default="3_3_8",
                     help="")
 parser.add_argument("--pool2_size", type=str, default="10_10",
                     help="")
+parser.add_argument("--mp_hidden", type=int, default="128",
+                    help="")
+parser.add_argument("--dim_out", type=int, default="2",
+                    help="")
 
 # parse arguments
 params = parser.parse_args()
 
 # check parameters
 
-assert os.path.isdir(params.data_path), params.data_path
 logger = init_logger(params)
+
+params.word2idx, params.glove_weight = load_w2v(params.embedding_path, params.dim_embedding)
 
 train_data = MSRPDataset(params.data_path, data_type="train")
 test_data = MSRPDataset(params.data_path, data_type="train")

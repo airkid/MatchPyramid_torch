@@ -2,7 +2,10 @@ import os
 import sys
 import logging
 import time
+from copy import deepcopy
 from datetime import timedelta
+import torch
+from torchtext.vocab import GloVe, Vectors
 
 
 class LogFormatter():
@@ -71,13 +74,13 @@ def init_logger(params):
             assert "'" not in x
             command.append("'%s'" % x)
     command = ' '.join(command)
-    logger = create_logger(os.path.join(params.data_path, 'train.log'), rank=getattr(params, 'global_rank', 0))
+    logger = create_logger(os.path.join(params.dump_path, 'train.log'), rank=getattr(params, 'global_rank', 0))
     logger.info("============ Initialized logger ============")
     logger.info("\n".join("%s: %s" % (k, str(v))
                           for k, v in sorted(dict(vars(params)).items())))
     logger.info("Running command: %s" % command)
     logger.info("")
-    logger_scores = create_logger(os.path.join(params.data_path, 'scores.log'), rank=getattr(params, 'global_rank', 0))
+    logger_scores = create_logger(os.path.join(params.dump_path, 'scores.log'), rank=getattr(params, 'global_rank', 0))
 
     return logger, logger_scores
 
@@ -87,3 +90,20 @@ def to_cuda(*args):
     Move tensors to CUDA.
     """
     return [None if x is None else x.cuda() for x in args]
+
+
+def load_w2v(data_path, dim_embedding):
+    # glove = GloVe(dim=dim_embedding)
+    glove = Vectors(data_path, ".")
+    vocab_size = len(glove.stoi)
+    word2idx = glove.stoi
+    weight = deepcopy(glove.vectors)
+    weight = torch.cat((weight, weight.new(1, dim_embedding).fill_(0.0)), dim=0)
+    word2idx['UNK'] = vocab_size
+    return word2idx, weight
+
+
+if __name__ == "__main__":
+    word2idx, weight = load_w2v('data/glove.6B.300d.txt', 300)
+    print(weight.size())
+    print(weight[len(word2idx)-1].tolist())
